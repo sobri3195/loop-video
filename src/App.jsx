@@ -1,15 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
-import { 
-  Upload, 
-  Scissors, 
-  Download, 
-  Play, 
-  Trash2, 
-  Plus, 
-  Settings, 
-  CheckCircle2, 
+import {
+  Upload,
+  Scissors,
+  Download,
+  Play,
+  Trash2,
+  Plus,
+  Settings,
+  CheckCircle2,
   AlertCircle,
   X,
   FileArchive,
@@ -21,7 +21,8 @@ import {
   Zap,
   Type,
   Maximize,
-  Volume2
+  Volume2,
+  ShieldCheck
 } from 'lucide-react';
 import { createZip } from './utils/zip';
 import { clsx } from 'clsx';
