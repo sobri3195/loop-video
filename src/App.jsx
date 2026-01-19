@@ -83,6 +83,7 @@ export default function App() {
     ffmpeg.on('progress', ({ progress }) => {
       // This is for internal ffmpeg progress (within a single exec)
       // We'll combine it with our manual clip progress
+      console.log('FFmpeg progress:', progress);
     });
 
     const loadWithRetry = async (retries = 3) => {
@@ -185,7 +186,15 @@ export default function App() {
   };
 
   const processVideo = async () => {
-    if (!videoFile || !loaded) return;
+    if (!videoFile || !loaded) {
+      console.log('Cannot process: videoFile=', !!videoFile, 'loaded=', loaded);
+      return;
+    }
+
+    if (duration <= 0) {
+      setMessage({ text: 'Durasi video tidak valid. Mohon coba upload ulang.', type: 'error' });
+      return;
+    }
 
     shouldProcessRef.current = true;
     setIsProcessing(true);
@@ -195,9 +204,12 @@ export default function App() {
     const ffmpeg = ffmpegRef.current;
     const inputName = 'input_' + videoFile.name;
 
+    console.log('Starting video processing...');
+
     try {
       setCurrentTask('Menyiapkan file...');
       await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
+      console.log('File written successfully:', inputName);
 
       let intervals = [];
       if (markers.length > 0) {
@@ -234,6 +246,9 @@ export default function App() {
         }
       }
 
+      console.log('Duration:', duration);
+      console.log('Intervals to process:', intervals);
+
       if (intervals.length === 0) {
         setMessage({ text: 'Tidak ada klip yang dapat dibuat.', type: 'error' });
         setIsProcessing(false);
@@ -254,16 +269,28 @@ export default function App() {
 
         setCurrentTask(`Memotong bagian ${i + 1} dari ${intervals.length}...`);
 
-        let args = [
-          '-ss', start.toFixed(3),
-          '-i', inputName,
-          '-t', clipDur.toFixed(3),
-        ];
+        let args = [];
+        const useCopyMode = trimSettings.mode === 'copy' && settings.resize === 'none' && !settings.normalize && !settings.watermark;
 
-        if (trimSettings.mode === 'copy' && settings.resize === 'none' && !settings.normalize && !settings.watermark) {
-          args.push('-c', 'copy');
+        if (useCopyMode) {
+          // For copy mode, use -ss before -i with -accurate_seek for fast keyframe seeking
+          // Note: This may not be precise but will be fast and won't hang
+          args = [
+            '-ss', start.toFixed(3),
+            '-accurate_seek',
+            '-i', inputName,
+            '-t', clipDur.toFixed(3),
+            '-c', 'copy',
+            '-avoid_negative_ts', '1' // Fix timestamp issues
+          ];
         } else {
-          // Encoding mode or premium features required
+          // Encoding mode or with effects required
+          args = [
+            '-ss', start.toFixed(3),
+            '-i', inputName,
+            '-t', clipDur.toFixed(3),
+          ];
+
           let filterComplex = '';
           let lastLabel = '[0:v]';
 
@@ -297,7 +324,9 @@ export default function App() {
 
         args.push(outputName);
 
+        console.log('Executing FFmpeg with args:', args);
         await ffmpeg.exec(args);
+        console.log('Clip created successfully:', outputName);
 
         const data = await ffmpeg.readFile(outputName);
         const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
@@ -305,6 +334,7 @@ export default function App() {
         // Generate thumbnail (first frame)
         const thumbName = `thumb_${i}.jpg`;
         try {
+          console.log('Generating thumbnail:', thumbName);
           await ffmpeg.exec([
               '-ss', start.toFixed(3),
               '-i', inputName,
@@ -314,6 +344,7 @@ export default function App() {
           ]);
           const thumbData = await ffmpeg.readFile(thumbName);
           const thumbUrl = URL.createObjectURL(new Blob([thumbData.buffer], { type: 'image/jpeg' }));
+          console.log('Thumbnail created successfully');
 
           const newClip = {
             id: Math.random().toString(36).substr(2, 9),
@@ -346,6 +377,7 @@ export default function App() {
 
         setClips([...generatedClips]);
         setProgress(((i + 1) / intervals.length) * 100);
+        console.log(`Progress updated: ${Math.round(((i + 1) / intervals.length) * 100)}%`);
       }
 
       if (shouldProcessRef.current) {
