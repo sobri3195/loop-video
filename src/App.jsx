@@ -235,14 +235,12 @@ export default function App() {
               end = duration;
             } else if (trimSettings.autoFit === 'discard') {
               intervals.push({ start: current, end: end });
-              current = duration; // stop
               break;
             }
           }
 
           intervals.push({ start: current, end: end });
           current = end;
-          if (current >= duration) break;
         }
       }
 
