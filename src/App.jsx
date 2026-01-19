@@ -99,14 +99,7 @@ export default function App() {
   useEffect(() => {
     return () => {
       // Cleanup all object URLs on unmount
-      objectUrlsRef.current.forEach(url => {
-        try {
-          URL.revokeObjectURL(url);
-        } catch (e) {
-          console.warn('Failed to revoke URL:', url, e);
-        }
-      });
-      objectUrlsRef.current = [];
+      revokeAllUrls();
     };
   }, []);
 
@@ -157,16 +150,13 @@ export default function App() {
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Clean up previous video URL if exists
+      // Clean up previous video URL
       if (videoUrl) {
         revokeAllUrls('video');
       }
-      // Also clean up any existing clips
-      clips.forEach(clip => {
-        if (clip.url) URL.revokeObjectURL(clip.url);
-        if (clip.thumbUrl) URL.revokeObjectURL(clip.thumbUrl);
-      });
-      objectUrlsRef.current = objectUrlsRef.current.filter(url => url.type !== 'clip' && url.type !== 'thumbnail');
+      // Clean up previous clips and thumbnails
+      revokeAllUrls('clip');
+      revokeAllUrls('thumbnail');
       
       setVideoFile(file);
       setVideoUrl(createTrackedObjectUrl(file, 'video'));
@@ -182,16 +172,13 @@ export default function App() {
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith('video/')) {
-      // Clean up previous video URL if exists
+      // Clean up previous video URL
       if (videoUrl) {
         revokeAllUrls('video');
       }
-      // Also clean up any existing clips
-      clips.forEach(clip => {
-        if (clip.url) URL.revokeObjectURL(clip.url);
-        if (clip.thumbUrl) URL.revokeObjectURL(clip.thumbUrl);
-      });
-      objectUrlsRef.current = objectUrlsRef.current.filter(url => url.type !== 'clip' && url.type !== 'thumbnail');
+      // Clean up previous clips and thumbnails
+      revokeAllUrls('clip');
+      revokeAllUrls('thumbnail');
       
       setVideoFile(file);
       setVideoUrl(createTrackedObjectUrl(file, 'video'));
@@ -261,6 +248,7 @@ export default function App() {
 
     const ffmpeg = ffmpegRef.current;
     const inputName = 'input_' + videoFile.name;
+    const generatedClips = [];
 
     console.log('Starting video processing...');
 
@@ -311,7 +299,6 @@ export default function App() {
         return;
       }
 
-      const generatedClips = [];
       for (let i = 0; i < intervals.length; i++) {
         // Check for cancellation using ref - FIXED: check on every iteration
         if (!shouldProcessRef.current) {
@@ -329,15 +316,14 @@ export default function App() {
         const useCopyMode = trimSettings.mode === 'copy' && settings.resize === 'none' && !settings.normalize && !settings.watermark;
 
         if (useCopyMode) {
-          // For copy mode, use -ss before -i with -accurate_seek for fast keyframe seeking
-          // Note: This may not be precise but will be fast and won't hang
+          // For copy mode, use -ss before -i for fast keyframe seeking
+          // Using -avoid_negative_ts make_zero is more robust for copy mode
           args = [
             '-ss', start.toFixed(3),
-            '-accurate_seek',
             '-i', inputName,
             '-t', clipDur.toFixed(3),
             '-c', 'copy',
-            '-avoid_negative_ts', '1' // Fix timestamp issues
+            '-avoid_negative_ts', 'make_zero'
           ];
         } else {
           // Encoding mode or with effects required
@@ -385,7 +371,7 @@ export default function App() {
         console.log('Clip created successfully:', outputName);
 
         const data = await ffmpeg.readFile(outputName);
-        const url = createTrackedObjectUrl(new Blob([data.buffer], { type: 'video/mp4' }), 'clip');
+        const url = createTrackedObjectUrl(new Blob([data], { type: 'video/mp4' }), 'clip');
 
         // Generate thumbnail (first frame)
         const thumbName = `thumb_${i}.jpg`;
@@ -400,7 +386,7 @@ export default function App() {
               thumbName
           ]);
           const thumbData = await ffmpeg.readFile(thumbName);
-          thumbUrl = createTrackedObjectUrl(new Blob([thumbData.buffer], { type: 'image/jpeg' }), 'thumbnail');
+          thumbUrl = createTrackedObjectUrl(new Blob([thumbData], { type: 'image/jpeg' }), 'thumbnail');
           console.log('Thumbnail created successfully');
         } catch (thumbError) {
           console.error('Gagal membuat thumbnail:', thumbError);
@@ -420,22 +406,15 @@ export default function App() {
 
         generatedClips.push(newClip);
 
-        // Accumulate progress in state instead of updating on every iteration
-        // This reduces re-renders and state race conditions
+        // Update progress and clips state on every iteration for better reliability
         const currentProgress = ((i + 1) / intervals.length) * 100;
         setProgress(currentProgress);
-        console.log(`Progress updated: ${Math.round(currentProgress)}%`);
-        
-        // Update clips state only occasionally to reduce re-renders
-        if ((i + 1) % 3 === 0 || i === intervals.length - 1) {
-          setClips([...generatedClips]);
-        }
+        setClips([...generatedClips]);
+        console.log(`Clip ${i+1} added, progress: ${Math.round(currentProgress)}%`);
       }
 
-      if (shouldProcessRef.current) {
-        // Final clips state update to ensure all clips are shown
-        setClips([...generatedClips]);
-        
+      // Final tasks after loop
+      if (generatedClips.length > 0) {
         setHistory(prev => [{
             id: Date.now(),
             name: videoFile.name,
@@ -443,11 +422,19 @@ export default function App() {
             clipsCount: generatedClips.length
         }, ...prev]);
 
-        setMessage({ text: 'Selesai! Semua klip telah diproses.', type: 'success' });
+        if (shouldProcessRef.current) {
+          setMessage({ text: 'Selesai! Semua klip telah diproses.', type: 'success' });
+        } else {
+          setMessage({ text: `Proses terhenti. ${generatedClips.length} klip berhasil dibuat.`, type: 'info' });
+        }
       }
     } catch (error) {
       console.error(error);
       setMessage({ text: 'Terjadi kesalahan saat memproses: ' + error.message, type: 'error' });
+      // Still show whatever clips we managed to generate
+      if (generatedClips.length > 0) {
+        setClips([...generatedClips]);
+      }
     } finally {
       setIsProcessing(false);
       setCurrentTask('');
