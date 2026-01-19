@@ -351,13 +351,13 @@ export default function App() {
           </div>
         </header>
 
-        <main className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Left Column - Controls & Preview */}
-          <div className="lg:col-span-7 space-y-6">
+        <main className="grid grid-cols-1 md:grid-cols-12 gap-8">
+         {/* Left Column - Controls & Preview */}
+         <div className="md:col-span-7 space-y-6">
             {/* Upload Area */}
             {!videoFile ? (
               <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-neutral-800 rounded-2xl cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group">
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                <div className="flex flex-col items-center justify-center text-center pt-5 pb-6">
                   <Upload className="w-12 h-12 text-neutral-600 group-hover:text-blue-500 transition-colors mb-4" />
                   <p className="mb-2 text-sm text-neutral-400">
                     <span className="font-semibold text-neutral-200">Klik untuk upload</span> atau drag and drop
@@ -390,14 +390,14 @@ export default function App() {
                   </button>
                 </div>
                 
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                    <div className="flex items-center gap-2 text-sm text-neutral-400">
                       <Clock className="w-4 h-4" />
-                      <span>Durasi: {formatTime(duration)}</span>
+                      <span className="md:text-base">Durasi: {formatTime(duration)}</span>
                    </div>
-                   <button 
+                   <button
                     onClick={addMarker}
-                    className="flex items-center gap-2 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-sm transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-sm transition-colors w-full sm:w-auto"
                    >
                      <Plus className="w-4 h-4" />
                      Tambah Marker (Split)
@@ -421,11 +421,11 @@ export default function App() {
             {/* Smart Settings */}
             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-6">
               <div className="flex items-center gap-2 border-b border-neutral-800 pb-4">
-                <Settings className="w-5 h-5 text-blue-500" />
-                <h2 className="font-semibold text-lg">Konfigurasi Pemotongan</h2>
+                 <Settings className="w-5 h-5 text-blue-500" />
+                 <h2 className="font-semibold text-lg md:text-xl">Konfigurasi Pemotongan</h2>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-neutral-400">Durasi Per Klip</label>
                   <select 
@@ -494,9 +494,9 @@ export default function App() {
               <div className="pt-4 border-t border-neutral-800">
                 <div className="flex items-center gap-2 mb-4">
                   <ShieldCheck className="w-4 h-4 text-purple-500" />
-                  <span className="text-sm font-semibold text-neutral-300">Fitur Premium</span>
+                  <span className="text-sm font-semibold text-neutral-300 md:text-base">Fitur Premium</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   <button 
                     onClick={() => setPremiumSettings({...premiumSettings, resize: premiumSettings.resize === '9:16' ? 'none' : '9:16'})}
                     className={cn(
@@ -583,30 +583,32 @@ export default function App() {
           </div>
 
           {/* Right Column - Results */}
-          <div className="lg:col-span-5 space-y-6">
-             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl flex flex-col h-[800px]">
+          <div className="md:col-span-5 space-y-6">
+             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl flex flex-col h-[600px] md:h-[800px]">
                 <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
                    <div className="flex items-center gap-2">
                       <LayoutGrid className="w-4 h-4 text-neutral-500" />
-                      <h2 className="font-semibold">Hasil Potongan ({clips.length})</h2>
+                      <h2 className="font-semibold text-base md:text-lg">Hasil Potongan ({clips.length})</h2>
                    </div>
                    <div className="flex items-center gap-2">
-                      <button 
+                      <button
                         onClick={() => setViewMode('grid')}
                         className={cn("p-1.5 rounded-md", viewMode === 'grid' ? "bg-neutral-800 text-blue-400" : "text-neutral-500")}
+                        title="Tampilan Grid"
                       >
                         <LayoutGrid className="w-4 h-4" />
                       </button>
-                      <button 
+                      <button
                         onClick={() => setViewMode('list')}
                         className={cn("p-1.5 rounded-md", viewMode === 'list' ? "bg-neutral-800 text-blue-400" : "text-neutral-500")}
+                        title="Tampilan Daftar"
                       >
                         <ListIcon className="w-4 h-4" />
                       </button>
                    </div>
                 </div>
 
-                <div className="p-4 border-b border-neutral-800 bg-neutral-900/50 flex gap-2">
+                <div className="p-4 border-b border-neutral-800 bg-neutral-900/50 flex flex-col sm:flex-row gap-2">
                    <button 
                     disabled={clips.length === 0}
                     onClick={handleDownloadAll}
@@ -633,8 +635,8 @@ export default function App() {
                     </div>
                   ) : (
                     <div className={cn(
-                        "grid gap-4",
-                        viewMode === 'grid' ? "grid-cols-2" : "grid-cols-1"
+                       "grid gap-4",
+                       viewMode === 'grid' ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"
                     )}>
                        {clips.map((clip, idx) => (
                          <div key={clip.id} className="group bg-neutral-800/50 border border-neutral-700/50 rounded-xl overflow-hidden hover:border-blue-500/50 transition-all">
