@@ -21,7 +21,8 @@ import {
   Zap,
   Type,
   Maximize,
-  Volume2
+  Volume2,
+  ShieldCheck
 } from 'lucide-react';
 import { createZip } from './utils/zip';
 import { clsx } from 'clsx';
