@@ -359,10 +359,10 @@ export default function App() {
               <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-neutral-800 rounded-2xl cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group">
                 <div className="flex flex-col items-center justify-center text-center pt-5 pb-6">
                   <Upload className="w-12 h-12 text-neutral-600 group-hover:text-blue-500 transition-colors mb-4" />
-                  <p className="mb-2 text-sm text-neutral-400">
+                  <p className="mb-2 text-sm md:text-base text-neutral-400">
                     <span className="font-semibold text-neutral-200">Klik untuk upload</span> atau drag and drop
                   </p>
-                  <p className="text-xs text-neutral-500">MP4, WebM (Maks 500MB)</p>
+                  <p className="text-xs md:text-sm text-neutral-500">MP4, WebM (Maks 500MB)</p>
                 </div>
                 <input type="file" className="hidden" accept="video/*" onChange={handleFileUpload} />
               </label>
@@ -393,7 +393,7 @@ export default function App() {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                    <div className="flex items-center gap-2 text-sm text-neutral-400">
                       <Clock className="w-4 h-4" />
-                      <span className="md:text-base">Durasi: {formatTime(duration)}</span>
+                      <span className="text-sm md:text-base">Durasi: {formatTime(duration)}</span>
                    </div>
                    <button
                     onClick={addMarker}
@@ -422,7 +422,7 @@ export default function App() {
             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-6">
               <div className="flex items-center gap-2 border-b border-neutral-800 pb-4">
                  <Settings className="w-5 h-5 text-blue-500" />
-                 <h2 className="font-semibold text-lg md:text-xl">Konfigurasi Pemotongan</h2>
+                 <h2 className="font-semibold text-sm md:text-base lg:text-lg">Konfigurasi Pemotongan</h2>
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -494,7 +494,7 @@ export default function App() {
               <div className="pt-4 border-t border-neutral-800">
                 <div className="flex items-center gap-2 mb-4">
                   <ShieldCheck className="w-4 h-4 text-purple-500" />
-                  <span className="text-sm font-semibold text-neutral-300 md:text-base">Fitur Premium</span>
+                  <span className="text-xs font-semibold text-neutral-300 md:text-sm lg:text-base">Fitur Premium</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   <button 
@@ -543,7 +543,7 @@ export default function App() {
               disabled={!videoFile || isProcessing || !loaded}
               onClick={processVideo}
               className={cn(
-                "w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all",
+                "w-full py-3 md:py-4 rounded-2xl font-bold text-base md:text-lg flex items-center justify-center gap-3 transition-all",
                 isProcessing ? "bg-neutral-800 text-neutral-500 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20 active:scale-[0.98]"
               )}
             >
@@ -588,7 +588,7 @@ export default function App() {
                 <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
                    <div className="flex items-center gap-2">
                       <LayoutGrid className="w-4 h-4 text-neutral-500" />
-                      <h2 className="font-semibold text-base md:text-lg">Hasil Potongan ({clips.length})</h2>
+                      <h2 className="font-semibold text-xs md:text-sm lg:text-base">Hasil Potongan ({clips.length})</h2>
                    </div>
                    <div className="flex items-center gap-2">
                       <button
