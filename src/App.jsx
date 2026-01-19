@@ -399,46 +399,17 @@ export default function App() {
         const data = await ffmpeg.readFile(outputName);
         const url = createTrackedObjectUrl(new Blob([data], { type: 'video/mp4' }), 'clip');
 
-        // Generate thumbnail (first frame)
-        // Use output clip instead of input to avoid memory issues with large videos
-        // Must do this BEFORE deleting the output file
-        const thumbName = `thumb_${i}.jpg`;
-        let thumbUrl = '';
-        try {
-          console.log('Generating thumbnail:', thumbName);
-          await ffmpeg.exec([
-              '-i', outputName,
-              '-vframes', '1',
-              '-q:v', '2',
-              thumbName
-          ]);
-          const thumbData = await ffmpeg.readFile(thumbName);
-          thumbUrl = createTrackedObjectUrl(new Blob([thumbData], { type: 'image/jpeg' }), 'thumbnail');
-          console.log('Thumbnail created successfully');
-        } catch (thumbError) {
-          console.error('Gagal membuat thumbnail:', thumbError);
-          // Continue without thumbnail
-        }
-
-        // Clean up files from FFmpeg filesystem to free memory
+        // Clean up clip file from FFmpeg filesystem to free memory immediately
         try {
           await ffmpeg.deleteFile(outputName);
-          // Also clean up thumbnail if it was created
-          if (thumbUrl) {
-            try {
-              await ffmpeg.deleteFile(thumbName);
-            } catch (e) {
-              // Ignore thumbnail cleanup errors
-            }
-          }
         } catch (e) {
-          // Ignore cleanup errors
+          console.warn('Failed to delete clip file:', e);
         }
 
         const newClip = {
           id: Math.random().toString(36).slice(2, 11), // FIXED: Use slice instead of substr
           url,
-          thumbUrl,
+          thumbUrl: '', // Thumbnails removed to prevent memory OOB errors
           name: outputName,
           index: i,
           startTime: start,
