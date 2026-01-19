@@ -3,3 +3,14 @@
   [headers.values]
     Cross-Origin-Embedder-Policy = "require-corp"
     Cross-Origin-Opener-Policy = "same-origin"
+
+# Disable Netlify snippet injection to prevent script errors
+[build.environment]
+  NETLIFY_SNIPPET_INJECTION = "false"
+
+# Also add an _headers file for more control
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Content-Type = "application/javascript; charset=utf-8"
+    X-Content-Type-Options = "nosniff"
