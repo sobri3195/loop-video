@@ -182,9 +182,19 @@ export default function App() {
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith('video/')) {
-      if (videoUrl) URL.revokeObjectURL(videoUrl);
+      // Clean up previous video URL if exists
+      if (videoUrl) {
+        revokeAllUrls('video');
+      }
+      // Also clean up any existing clips
+      clips.forEach(clip => {
+        if (clip.url) URL.revokeObjectURL(clip.url);
+        if (clip.thumbUrl) URL.revokeObjectURL(clip.thumbUrl);
+      });
+      objectUrlsRef.current = objectUrlsRef.current.filter(url => url.type !== 'clip' && url.type !== 'thumbnail');
+      
       setVideoFile(file);
-      setVideoUrl(URL.createObjectURL(file));
+      setVideoUrl(createTrackedObjectUrl(file, 'video'));
       setMarkers([]);
       setClips([]);
       setProgress(0);
@@ -379,6 +389,7 @@ export default function App() {
 
         // Generate thumbnail (first frame)
         const thumbName = `thumb_${i}.jpg`;
+        let thumbUrl = '';
         try {
           console.log('Generating thumbnail:', thumbName);
           await ffmpeg.exec([
@@ -389,37 +400,25 @@ export default function App() {
               thumbName
           ]);
           const thumbData = await ffmpeg.readFile(thumbName);
-          const thumbUrl = createTrackedObjectUrl(new Blob([thumbData.buffer], { type: 'image/jpeg' }), 'thumbnail');
+          thumbUrl = createTrackedObjectUrl(new Blob([thumbData.buffer], { type: 'image/jpeg' }), 'thumbnail');
           console.log('Thumbnail created successfully');
-
-          const newClip = {
-            id: Math.random().toString(36).slice(2, 11), // FIXED: Use slice instead of substr
-            url,
-            thumbUrl,
-            name: outputName,
-            index: i,
-            startTime: start,
-            endTime: end,
-            duration: clipDur
-          };
-
-          generatedClips.push(newClip);
         } catch (thumbError) {
           console.error('Gagal membuat thumbnail:', thumbError);
-          // Add clip without thumbnail if thumbnail generation fails
-          const newClip = {
-            id: Math.random().toString(36).slice(2, 11), // FIXED: Use slice instead of substr
-            url,
-            thumbUrl: '',
-            name: outputName,
-            index: i,
-            startTime: start,
-            endTime: end,
-            duration: clipDur
-          };
-
-          generatedClips.push(newClip);
+          // Continue without thumbnail
         }
+
+        const newClip = {
+          id: Math.random().toString(36).slice(2, 11), // FIXED: Use slice instead of substr
+          url,
+          thumbUrl,
+          name: outputName,
+          index: i,
+          startTime: start,
+          endTime: end,
+          duration: clipDur
+        };
+
+        generatedClips.push(newClip);
 
         // Accumulate progress in state instead of updating on every iteration
         // This reduces re-renders and state race conditions
