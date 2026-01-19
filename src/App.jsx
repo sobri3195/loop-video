@@ -400,13 +400,14 @@ export default function App() {
         const url = createTrackedObjectUrl(new Blob([data], { type: 'video/mp4' }), 'clip');
 
         // Generate thumbnail (first frame)
+        // Use output clip instead of input to avoid memory issues with large videos
+        // Must do this BEFORE deleting the output file
         const thumbName = `thumb_${i}.jpg`;
         let thumbUrl = '';
         try {
           console.log('Generating thumbnail:', thumbName);
           await ffmpeg.exec([
-              '-ss', start.toFixed(3),
-              '-i', inputName,
+              '-i', outputName,
               '-vframes', '1',
               '-q:v', '2',
               thumbName
@@ -417,6 +418,21 @@ export default function App() {
         } catch (thumbError) {
           console.error('Gagal membuat thumbnail:', thumbError);
           // Continue without thumbnail
+        }
+
+        // Clean up files from FFmpeg filesystem to free memory
+        try {
+          await ffmpeg.deleteFile(outputName);
+          // Also clean up thumbnail if it was created
+          if (thumbUrl) {
+            try {
+              await ffmpeg.deleteFile(thumbName);
+            } catch (e) {
+              // Ignore thumbnail cleanup errors
+            }
+          }
+        } catch (e) {
+          // Ignore cleanup errors
         }
 
         const newClip = {
