@@ -408,22 +408,26 @@ export default function App() {
           await ffmpeg.exec(args);
           console.log('Clip created successfully:', outputName);
         } catch (ffmpegError) {
-          // Check if output file exists despite the error
-          const files = await ffmpeg.listFiles().catch(() => []);
-          const fileExists = files.some(f => f.name === outputName);
-          
-          if (!fileExists) {
+          // Try to read the file anyway - if it exists, FFmpeg might have warnings but still succeeded
+          try {
+            await ffmpeg.readFile(outputName);
+            console.warn('FFmpeg warning during processing:', ffmpegError.message);
+            console.log('Continuing - output file was created successfully despite warning');
+          } catch (readError) {
             console.error('FFmpeg error and no output file created:', ffmpegError);
             throw new Error('Gagal memproses klip: ' + ffmpegError.message);
           }
-          
-          console.warn('FFmpeg warning during processing:', ffmpegError.message);
-          console.log('Continuing - output file was created successfully');
         }
 
-        // Verify output exists even if ffmpeg.exec resolved successfully
-        const filesAfter = await ffmpeg.listFiles().catch(() => []);
-        const outputExists = filesAfter.some(f => f.name === outputName);
+        // Verify output exists by trying to read it
+        let outputExists = true;
+        try {
+          await ffmpeg.readFile(outputName);
+        } catch (readError) {
+          console.error('Output file does not exist:', readError);
+          outputExists = false;
+        }
+        
         if (!outputExists) {
           throw new Error('FFmpeg tidak menghasilkan file output untuk klip ini.');
         }
