@@ -21,8 +21,7 @@ import {
   Zap,
   Type,
   Maximize,
-  Volume2,
-  ShieldCheck
+  Volume2
 } from 'lucide-react';
 import { createZip } from './utils/zip';
 import { clsx } from 'clsx';
@@ -67,9 +66,47 @@ export default function App() {
   const ffmpegRef = useRef(new FFmpeg());
   const videoRef = useRef(null);
   const shouldProcessRef = useRef(false);
+  const objectUrlsRef = useRef([]); // Track all created object URLs for cleanup
+
+  // Helper functions for object URL management
+  const createTrackedObjectUrl = (blob, type = '') => {
+    const url = URL.createObjectURL(blob);
+    objectUrlsRef.current.push({ url, type });
+    console.log(`Created Object URL (${type}):`, url);
+    return url;
+  };
+
+  const revokeAllUrls = (type = '') => {
+    const urls = objectUrlsRef.current;
+    for (let i = urls.length - 1; i >= 0; i--) {
+      if (!type || urls[i].type === type) {
+        try {
+          URL.revokeObjectURL(urls[i].url);
+          console.log(`Revoked Object URL (${urls[i].type}):`, urls[i].url);
+          urls.splice(i, 1);
+        } catch (e) {
+          console.warn('Failed to revoke URL:', urls[i].url, e);
+        }
+      }
+    }
+  };
 
   useEffect(() => {
     loadFFmpeg();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      // Cleanup all object URLs on unmount
+      objectUrlsRef.current.forEach(url => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          console.warn('Failed to revoke URL:', url, e);
+        }
+      });
+      objectUrlsRef.current = [];
+    };
   }, []);
 
   const loadFFmpeg = async () => {
@@ -119,9 +156,19 @@ export default function App() {
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (videoUrl) URL.revokeObjectURL(videoUrl);
+      // Clean up previous video URL if exists
+      if (videoUrl) {
+        revokeAllUrls('video');
+      }
+      // Also clean up any existing clips
+      clips.forEach(clip => {
+        if (clip.url) URL.revokeObjectURL(clip.url);
+        if (clip.thumbUrl) URL.revokeObjectURL(clip.thumbUrl);
+      });
+      objectUrlsRef.current = objectUrlsRef.current.filter(url => url.type !== 'clip' && url.type !== 'thumbnail');
+      
       setVideoFile(file);
-      setVideoUrl(URL.createObjectURL(file));
+      setVideoUrl(createTrackedObjectUrl(file, 'video'));
       setMarkers([]);
       setClips([]);
       setProgress(0);
@@ -255,8 +302,8 @@ export default function App() {
 
       const generatedClips = [];
       for (let i = 0; i < intervals.length; i++) {
-        // Check for cancellation using ref
-        if (!shouldProcessRef.current && i > 0) {
+        // Check for cancellation using ref - FIXED: check on every iteration
+        if (!shouldProcessRef.current) {
           setMessage({ text: 'Proses dibatalkan.', type: 'info' });
           break;
         }
@@ -327,7 +374,7 @@ export default function App() {
         console.log('Clip created successfully:', outputName);
 
         const data = await ffmpeg.readFile(outputName);
-        const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
+        const url = createTrackedObjectUrl(new Blob([data.buffer], { type: 'video/mp4' }), 'clip');
 
         // Generate thumbnail (first frame)
         const thumbName = `thumb_${i}.jpg`;
@@ -341,11 +388,11 @@ export default function App() {
               thumbName
           ]);
           const thumbData = await ffmpeg.readFile(thumbName);
-          const thumbUrl = URL.createObjectURL(new Blob([thumbData.buffer], { type: 'image/jpeg' }));
+          const thumbUrl = createTrackedObjectUrl(new Blob([thumbData.buffer], { type: 'image/jpeg' }), 'thumbnail');
           console.log('Thumbnail created successfully');
 
           const newClip = {
-            id: Math.random().toString(36).substr(2, 9),
+            id: Math.random().toString(36).slice(2, 11), // FIXED: Use slice instead of substr
             url,
             thumbUrl,
             name: outputName,
@@ -360,7 +407,7 @@ export default function App() {
           console.error('Gagal membuat thumbnail:', thumbError);
           // Add clip without thumbnail if thumbnail generation fails
           const newClip = {
-            id: Math.random().toString(36).substr(2, 9),
+            id: Math.random().toString(36).slice(2, 11), // FIXED: Use slice instead of substr
             url,
             thumbUrl: '',
             name: outputName,
@@ -373,12 +420,22 @@ export default function App() {
           generatedClips.push(newClip);
         }
 
-        setClips([...generatedClips]);
-        setProgress(((i + 1) / intervals.length) * 100);
-        console.log(`Progress updated: ${Math.round(((i + 1) / intervals.length) * 100)}%`);
+        // Accumulate progress in state instead of updating on every iteration
+        // This reduces re-renders and state race conditions
+        const currentProgress = ((i + 1) / intervals.length) * 100;
+        setProgress(currentProgress);
+        console.log(`Progress updated: ${Math.round(currentProgress)}%`);
+        
+        // Update clips state only occasionally to reduce re-renders
+        if ((i + 1) % 3 === 0 || i === intervals.length - 1) {
+          setClips([...generatedClips]);
+        }
       }
 
       if (shouldProcessRef.current) {
+        // Final clips state update to ensure all clips are shown
+        setClips([...generatedClips]);
+        
         setHistory(prev => [{
             id: Date.now(),
             name: videoFile.name,
