@@ -19,7 +19,6 @@ import {
   RefreshCw,
   Clock,
   Zap,
-  ShieldCheck,
   Type,
   Maximize,
   Volume2
@@ -40,7 +39,7 @@ const DEFAULT_TRIM_SETTINGS = {
   template: '{name}_part{index}_{start}-{end}',
 };
 
-const PREMIUM_SETTINGS = {
+const DEFAULT_SETTINGS = {
   watermark: '',
   resize: 'none', // 'none', '9:16'
   normalize: false,
@@ -59,7 +58,7 @@ export default function App() {
   const [currentTask, setCurrentTask] = useState('');
   const [message, setMessage] = useState({ text: 'Memuat ffmpeg...', type: 'info' });
   const [trimSettings, setTrimSettings] = useState(DEFAULT_TRIM_SETTINGS);
-  const [premiumSettings, setPremiumSettings] = useState(PREMIUM_SETTINGS);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [history, setHistory] = useState([]);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
   const [isDragging, setIsDragging] = useState(false);
@@ -260,22 +259,22 @@ export default function App() {
           '-t', clipDur.toFixed(3),
         ];
 
-        if (trimSettings.mode === 'copy' && premiumSettings.resize === 'none' && !premiumSettings.normalize && !premiumSettings.watermark) {
+        if (trimSettings.mode === 'copy' && settings.resize === 'none' && !settings.normalize && !settings.watermark) {
           args.push('-c', 'copy');
         } else {
           // Encoding mode or premium features required
           let filterComplex = '';
           let lastLabel = '[0:v]';
 
-          if (premiumSettings.resize === '9:16') {
+          if (settings.resize === '9:16') {
              filterComplex += `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:10[bg];`;
              filterComplex += `[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];`;
              filterComplex += `[bg][fg]overlay=(W-w)/2:(H-h)/2[v];`;
              lastLabel = '[v]';
           }
 
-          if (premiumSettings.watermark) {
-            filterComplex += `${lastLabel}drawtext=text='${premiumSettings.watermark}':x=w-tw-20:y=h-th-20:fontsize=48:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2[v_out];`;
+          if (settings.watermark) {
+            filterComplex += `${lastLabel}drawtext=text='${settings.watermark}':x=w-tw-20:y=h-th-20:fontsize=48:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2[v_out];`;
             lastLabel = '[v_out]';
           }
 
@@ -287,11 +286,11 @@ export default function App() {
             args.push('-map', '0:a?');
           }
 
-          if (premiumSettings.normalize) {
+          if (settings.normalize) {
             args.push('-af', 'loudnorm');
           }
 
-          args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', premiumSettings.quality === 'High' ? '18' : premiumSettings.quality === 'Medium' ? '23' : '28');
+          args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', settings.quality === 'High' ? '18' : settings.quality === 'Medium' ? '23' : '28');
           args.push('-c:a', 'aac', '-b:a', '128k');
         }
 
@@ -592,18 +591,18 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Premium Tools */}
+              {/* Tools */}
               <div className="pt-4 border-t border-neutral-800">
                 <div className="flex items-center gap-2 mb-4">
-                  <ShieldCheck className="w-4 h-4 text-purple-500 flex-shrink-0" />
-                  <span className="text-sm font-semibold text-neutral-300">Fitur Premium</span>
+                  <Zap className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                  <span className="text-sm font-semibold text-neutral-300">Tools</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                   <button 
-                    onClick={() => setPremiumSettings({...premiumSettings, resize: premiumSettings.resize === '9:16' ? 'none' : '9:16'})}
+                    onClick={() => setSettings({...settings, resize: settings.resize === '9:16' ? 'none' : '9:16'})}
                     className={cn(
                       "flex items-center gap-3 p-3 rounded-xl border text-left transition-all",
-                      premiumSettings.resize === '9:16' ? "bg-purple-500/10 border-purple-500/50 text-purple-400" : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-neutral-600"
+                      settings.resize === '9:16' ? "bg-blue-500/10 border-blue-500/50 text-blue-400" : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-neutral-600"
                     )}
                   >
                     <Maximize className="w-5 h-5" />
@@ -614,10 +613,10 @@ export default function App() {
                   </button>
 
                   <button 
-                    onClick={() => setPremiumSettings({...premiumSettings, normalize: !premiumSettings.normalize})}
+                    onClick={() => setSettings({...settings, normalize: !settings.normalize})}
                     className={cn(
                       "flex items-center gap-3 p-3 rounded-xl border text-left transition-all",
-                      premiumSettings.normalize ? "bg-purple-500/10 border-purple-500/50 text-purple-400" : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-neutral-600"
+                      settings.normalize ? "bg-blue-500/10 border-blue-500/50 text-blue-400" : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-neutral-600"
                     )}
                   >
                     <Volume2 className="w-5 h-5" />
@@ -632,10 +631,25 @@ export default function App() {
                     <input 
                       type="text" 
                       placeholder="Watermark teks..."
-                      value={premiumSettings.watermark}
-                      onChange={(e) => setPremiumSettings({...premiumSettings, watermark: e.target.value})}
-                      className="w-full bg-neutral-800 border border-neutral-700 rounded-xl pl-10 pr-3 py-3 text-xs outline-none focus:border-purple-500 transition-colors"
+                      value={settings.watermark}
+                      onChange={(e) => setSettings({...settings, watermark: e.target.value})}
+                      className="w-full bg-neutral-800 border border-neutral-700 rounded-xl pl-10 pr-3 py-3 text-xs outline-none focus:border-blue-500 transition-colors"
                     />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-neutral-400">Kualitas Video</label>
+                    <select 
+                      value={settings.quality}
+                      onChange={(e) => setSettings({...settings, quality: e.target.value})}
+                      className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 outline-none focus:border-blue-500 transition-colors"
+                    >
+                      <option value="Low">Rendah (smaller file)</option>
+                      <option value="Medium">Sedang (recommended)</option>
+                      <option value="High">Tinggi (best quality)</option>
+                    </select>
                   </div>
                 </div>
               </div>
