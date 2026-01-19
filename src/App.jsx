@@ -344,7 +344,9 @@ export default function App() {
           }
 
           if (settings.watermark) {
-            filterComplex += `${lastLabel}drawtext=text='${settings.watermark}':x=w-tw-20:y=h-th-20:fontsize=48:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2[v_out];`;
+            // Use a more reliable approach for FFmpeg.wasm
+            // Try different font paths that might be available
+            filterComplex += `${lastLabel}drawtext=text='${settings.watermark}':x=w-tw-20:y=h-th-20:fontsize=48:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf[v_out];`;
             lastLabel = '[v_out]';
           }
 
@@ -366,9 +368,33 @@ export default function App() {
 
         args.push(outputName);
 
-        console.log('Executing FFmpeg with args:', args);
-        await ffmpeg.exec(args);
-        console.log('Clip created successfully:', outputName);
+        try {
+          console.log('Executing FFmpeg with args:', args);
+          await ffmpeg.exec(args);
+          console.log('Clip created successfully:', outputName);
+        } catch (ffmpegError) {
+          // Check if this is a font-related error and try fallback without watermark
+          if (settings.watermark && ffmpegError.message.includes('No font filename provided')) {
+            console.warn('Font error detected, retrying without watermark...', ffmpegError);
+            
+            // Remove watermark and retry
+            const argsWithoutWatermark = args.filter(arg => !arg.includes('drawtext') && !arg.includes('filter_complex'));
+            
+            if (argsWithoutWatermark.includes('-filter_complex')) {
+              const filterIndex = argsWithoutWatermark.indexOf('-filter_complex');
+              // Remove filter_complex and its argument
+              argsWithoutWatermark.splice(filterIndex, 2);
+            }
+            
+            setMessage({ text: 'Mengulang tanpa watermark karena masalah font...', type: 'info' });
+            console.log('Retrying without watermark, args:', argsWithoutWatermark);
+            
+            await ffmpeg.exec(argsWithoutWatermark);
+            console.log('Clip created successfully without watermark:', outputName);
+          } else {
+            throw ffmpegError; // Re-throw if not a font error or no watermark
+          }
+        }
 
         const data = await ffmpeg.readFile(outputName);
         const url = createTrackedObjectUrl(new Blob([data], { type: 'video/mp4' }), 'clip');
