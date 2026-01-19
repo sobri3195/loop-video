@@ -344,9 +344,9 @@ export default function App() {
           }
 
           if (settings.watermark) {
-            // Use a more reliable approach for FFmpeg.wasm
-            // Try different font paths that might be available
-            filterComplex += `${lastLabel}drawtext=text='${settings.watermark}':x=w-tw-20:y=h-th-20:fontsize=48:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2:fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf[v_out];`;
+            // Use drawtext without fontfile parameter for FFmpeg.wasm compatibility
+            // Default font will be used automatically
+            filterComplex += `${lastLabel}drawtext=text='${settings.watermark}':x=w-tw-20:y=h-th-20:fontsize=48:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2[v_out];`;
             lastLabel = '[v_out]';
           }
 
@@ -373,35 +373,35 @@ export default function App() {
           await ffmpeg.exec(args);
           console.log('Clip created successfully:', outputName);
         } catch (ffmpegError) {
-          // Check if this is a font-related error and try fallback without watermark
-          if (settings.watermark && ffmpegError.message.includes('No font filename provided')) {
-            console.warn('Font error detected, retrying without watermark...', ffmpegError);
-            
-            // Remove watermark and retry
-            const argsWithoutWatermark = args.filter(arg => !arg.includes('drawtext') && !arg.includes('filter_complex'));
-            
-            if (argsWithoutWatermark.includes('-filter_complex')) {
-              const filterIndex = argsWithoutWatermark.indexOf('-filter_complex');
-              // Remove filter_complex and its argument
-              argsWithoutWatermark.splice(filterIndex, 2);
-            }
-            
-            setMessage({ text: 'Mengulang tanpa watermark karena masalah font...', type: 'info' });
-            console.log('Retrying without watermark, args:', argsWithoutWatermark);
-            
-            await ffmpeg.exec(argsWithoutWatermark);
-            console.log('Clip created successfully without watermark:', outputName);
-          } else {
-            throw ffmpegError; // Re-throw if not a font error or no watermark
+          // Check if output file exists despite the error
+          const files = await ffmpeg.listFiles().catch(() => []);
+          const fileExists = files.some(f => f.name === outputName);
+          
+          if (!fileExists) {
+            console.error('FFmpeg error and no output file created:', ffmpegError);
+            throw new Error('Gagal memproses klip: ' + ffmpegError.message);
           }
+          
+          console.warn('FFmpeg warning during processing:', ffmpegError.message);
+          console.log('Continuing - output file was created successfully');
         }
 
-        const data = await ffmpeg.readFile(outputName);
+        // Read the output file
+        let data;
+        try {
+          data = await ffmpeg.readFile(outputName);
+          console.log('Successfully read output file:', outputName);
+        } catch (readError) {
+          console.error('Error reading output file:', readError);
+          throw new Error('Gagal membaca klip yang telah diproses: ' + readError.message);
+        }
+
         const url = createTrackedObjectUrl(new Blob([data], { type: 'video/mp4' }), 'clip');
 
         // Clean up clip file from FFmpeg filesystem to free memory immediately
         try {
           await ffmpeg.deleteFile(outputName);
+          console.log('Deleted temp file:', outputName);
         } catch (e) {
           console.warn('Failed to delete clip file:', e);
         }
