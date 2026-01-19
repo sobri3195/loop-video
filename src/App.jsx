@@ -325,14 +325,14 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-200 p-4 md:p-8 font-sans">
-      <div className="max-w-6xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-neutral-800 pb-6">
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+            <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
               Smart Video Clipper
             </h1>
-            <p className="text-neutral-500 mt-1">Potong video cerdas untuk TikTok, Shorts, dan Reels.</p>
+            <p className="text-sm md:text-base text-neutral-500 mt-1">Potong video cerdas untuk TikTok, Shorts, dan Reels.</p>
           </div>
           
           <div className="flex items-center gap-3">
@@ -356,19 +356,19 @@ export default function App() {
           <div className="lg:col-span-7 space-y-6">
             {/* Upload Area */}
             {!videoFile ? (
-              <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-neutral-800 rounded-2xl cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group">
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <Upload className="w-12 h-12 text-neutral-600 group-hover:text-blue-500 transition-colors mb-4" />
-                  <p className="mb-2 text-sm text-neutral-400">
+              <label className="flex flex-col items-center justify-center w-full min-h-[16rem] md:h-64 border-2 border-dashed border-neutral-800 rounded-2xl cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6 px-4 text-center">
+                  <Upload className="w-10 h-10 md:w-12 md:h-12 text-neutral-600 group-hover:text-blue-500 transition-colors mb-4" />
+                  <p className="mb-2 text-sm md:text-base text-neutral-400">
                     <span className="font-semibold text-neutral-200">Klik untuk upload</span> atau drag and drop
                   </p>
-                  <p className="text-xs text-neutral-500">MP4, WebM (Maks 500MB)</p>
+                  <p className="text-xs md:text-sm text-neutral-500">MP4, WebM (Maks 500MB)</p>
                 </div>
                 <input type="file" className="hidden" accept="video/*" onChange={handleFileUpload} />
               </label>
             ) : (
               <div className="space-y-4">
-                <div className="relative aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-neutral-800">
+                <div className="relative aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-neutral-800 group">
                   <video 
                     ref={videoRef}
                     src={videoUrl} 
@@ -384,7 +384,8 @@ export default function App() {
                         if (videoUrl) URL.revokeObjectURL(videoUrl);
                         setVideoUrl('');
                     }}
-                    className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-red-500 transition-colors rounded-full backdrop-blur-md"
+                    className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/60 hover:bg-red-500 transition-colors rounded-full backdrop-blur-sm opacity-0 group-hover:opacity-100"
+                    title="Hapus video"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -406,11 +407,11 @@ export default function App() {
 
                 {markers.length > 0 && (
                   <div className="flex flex-wrap gap-2 p-4 bg-neutral-900/50 rounded-xl border border-neutral-800">
-                    <span className="text-xs font-semibold text-neutral-500 w-full mb-1">MARKER SPLIT:</span>
+                    <span className="text-xs font-semibold text-neutral-500 w-full mb-1">MARKER SPLIT ({markers.length}):</span>
                     {markers.map((m, i) => (
-                      <div key={i} className="flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-md text-xs">
+                      <div key={i} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-lg text-xs font-medium">
                         <span>{formatTime(m)}</span>
-                        <button onClick={() => removeMarker(i)}><X className="w-3 h-3 hover:text-red-400" /></button>
+                        <button onClick={() => removeMarker(i)} className="hover:scale-110 transition-transform" title="Hapus marker"><X className="w-3 h-3 hover:text-red-400" /></button>
                       </div>
                     ))}
                   </div>
@@ -419,10 +420,10 @@ export default function App() {
             )}
 
             {/* Smart Settings */}
-            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-6">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 md:p-6 space-y-6">
               <div className="flex items-center gap-2 border-b border-neutral-800 pb-4">
-                <Settings className="w-5 h-5 text-blue-500" />
-                <h2 className="font-semibold text-lg">Konfigurasi Pemotongan</h2>
+                <Settings className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                <h2 className="font-semibold text-base md:text-lg">Konfigurasi Pemotongan</h2>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -493,10 +494,10 @@ export default function App() {
               {/* Premium Tools */}
               <div className="pt-4 border-t border-neutral-800">
                 <div className="flex items-center gap-2 mb-4">
-                  <ShieldCheck className="w-4 h-4 text-purple-500" />
+                  <ShieldCheck className="w-4 h-4 text-purple-500 flex-shrink-0" />
                   <span className="text-sm font-semibold text-neutral-300">Fitur Premium</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                   <button 
                     onClick={() => setPremiumSettings({...premiumSettings, resize: premiumSettings.resize === '9:16' ? 'none' : '9:16'})}
                     className={cn(
@@ -543,38 +544,40 @@ export default function App() {
               disabled={!videoFile || isProcessing || !loaded}
               onClick={processVideo}
               className={cn(
-                "w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all",
-                isProcessing ? "bg-neutral-800 text-neutral-500 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20 active:scale-[0.98]"
+                "w-full py-3 md:py-4 rounded-2xl font-bold text-base md:text-lg flex items-center justify-center gap-3 transition-all",
+                isProcessing ? "bg-neutral-800 text-neutral-500 cursor-not-allowed" : 
+                !videoFile || !loaded ? "bg-neutral-800 text-neutral-600 cursor-not-allowed" :
+                "bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg shadow-blue-900/30 active:scale-[0.98]"
               )}
             >
               {isProcessing ? (
                 <>
-                  <RefreshCw className="w-6 h-6 animate-spin" />
-                  Memproses {Math.round(progress)}%
+                  <RefreshCw className="w-5 h-5 md:w-6 md:h-6 animate-spin" />
+                  <span>Memproses {Math.round(progress)}%</span>
                 </>
               ) : (
                 <>
-                  <Scissors className="w-6 h-6" />
-                  Mulai Potong Sekarang
+                  <Scissors className="w-5 h-5 md:w-6 md:h-6" />
+                  <span>Mulai Potong Sekarang</span>
                 </>
               )}
             </button>
             
             {isProcessing && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-blue-400 font-medium">{currentTask}</span>
-                  <span className="text-neutral-500">{Math.round(progress)}%</span>
+              <div className="space-y-3 p-4 bg-neutral-900/50 rounded-xl border border-neutral-800">
+                <div className="flex justify-between text-sm items-center">
+                  <span className="text-blue-400 font-medium truncate flex-1">{currentTask}</span>
+                  <span className="text-neutral-400 ml-2 flex-shrink-0 font-mono">{Math.round(progress)}%</span>
                 </div>
                 <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-blue-500 transition-all duration-300 ease-out shadow-[0_0_12px_rgba(59,130,246,0.5)]"
+                    className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-300 ease-out shadow-[0_0_12px_rgba(59,130,246,0.6)]"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
                 <button 
                   onClick={() => setIsProcessing(false)}
-                  className="text-xs text-red-500 hover:underline mx-auto block"
+                  className="text-xs text-red-400 hover:text-red-300 hover:underline mx-auto block transition-colors"
                 >
                   Batalkan Proses
                 </button>
@@ -584,7 +587,7 @@ export default function App() {
 
           {/* Right Column - Results */}
           <div className="lg:col-span-5 space-y-6">
-             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl flex flex-col h-[800px]">
+             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl flex flex-col min-h-[600px] max-h-[800px] lg:h-[calc(100vh-12rem)]">
                 <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
                    <div className="flex items-center gap-2">
                       <LayoutGrid className="w-4 h-4 text-neutral-500" />
@@ -606,19 +609,20 @@ export default function App() {
                    </div>
                 </div>
 
-                <div className="p-4 border-b border-neutral-800 bg-neutral-900/50 flex gap-2">
+                <div className="p-3 md:p-4 border-b border-neutral-800 bg-neutral-900/50 flex gap-2">
                    <button 
                     disabled={clips.length === 0}
                     onClick={handleDownloadAll}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-green-600 hover:bg-green-500 disabled:bg-neutral-800 disabled:text-neutral-600 text-white rounded-xl text-sm font-bold transition-all"
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 disabled:from-neutral-800 disabled:to-neutral-800 disabled:text-neutral-600 text-white rounded-xl text-sm font-bold transition-all shadow-sm disabled:shadow-none"
                    >
                      <FileArchive className="w-4 h-4" />
-                     Download ZIP
+                     <span className="hidden sm:inline">Download ZIP</span>
+                     <span className="sm:hidden">ZIP</span>
                    </button>
                    <button 
                     disabled={clips.length === 0}
                     onClick={copyCaptions}
-                    className="px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 disabled:text-neutral-600 rounded-xl text-sm font-medium transition-all"
+                    className="px-3 md:px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 disabled:text-neutral-600 disabled:cursor-not-allowed rounded-xl text-sm font-medium transition-all"
                     title="Copy Timestamp Caption"
                    >
                      <Copy className="w-4 h-4" />
@@ -633,11 +637,11 @@ export default function App() {
                     </div>
                   ) : (
                     <div className={cn(
-                        "grid gap-4",
-                        viewMode === 'grid' ? "grid-cols-2" : "grid-cols-1"
+                        "grid gap-3 md:gap-4",
+                        viewMode === 'grid' ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"
                     )}>
                        {clips.map((clip, idx) => (
-                         <div key={clip.id} className="group bg-neutral-800/50 border border-neutral-700/50 rounded-xl overflow-hidden hover:border-blue-500/50 transition-all">
+                         <div key={clip.id} className="group bg-neutral-800/50 border border-neutral-700/50 rounded-xl overflow-hidden hover:border-blue-500/50 transition-all shadow-sm hover:shadow-md">
                             <div className="relative aspect-video bg-black">
                                <img src={clip.thumbUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" alt={clip.name} />
                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -650,16 +654,16 @@ export default function App() {
                                </div>
                             </div>
                             <div className="p-3 space-y-2">
-                               <div className="text-[10px] font-medium text-neutral-400 truncate" title={clip.name}>
+                               <div className="text-[11px] font-medium text-neutral-300 truncate leading-tight" title={clip.name}>
                                  {clip.name}
                                </div>
-                               <div className="flex items-center justify-between">
-                                  <span className="text-[10px] text-neutral-500">{formatTime(clip.startTime)} - {formatTime(clip.endTime)}</span>
-                                  <div className="flex items-center gap-1">
-                                     <button onClick={() => removeClip(clip.id)} className="p-1 hover:text-red-400 transition-colors">
+                               <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[10px] text-neutral-500 flex-shrink-0">{formatTime(clip.startTime)} - {formatTime(clip.endTime)}</span>
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                     <button onClick={() => removeClip(clip.id)} className="p-1.5 hover:bg-red-500/10 hover:text-red-400 rounded transition-colors" title="Hapus">
                                         <Trash2 className="w-3.5 h-3.5" />
                                      </button>
-                                     <a href={clip.url} download={clip.name} className="p-1 hover:text-blue-400 transition-colors">
+                                     <a href={clip.url} download={clip.name} className="p-1.5 hover:bg-blue-500/10 hover:text-blue-400 rounded transition-colors" title="Download">
                                         <Download className="w-3.5 h-3.5" />
                                      </a>
                                   </div>
@@ -673,14 +677,17 @@ export default function App() {
 
                 {/* History Section */}
                 {history.length > 0 && (
-                   <div className="p-4 border-t border-neutral-800 bg-neutral-900/80">
-                      <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3">Riwayat Sesi</h3>
+                   <div className="p-3 md:p-4 border-t border-neutral-800 bg-neutral-900/80">
+                      <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <Clock className="w-3 h-3" />
+                        Riwayat Sesi
+                      </h3>
                       <div className="space-y-2">
                          {history.slice(0, 3).map(item => (
-                           <div key={item.id} className="flex items-center justify-between text-xs p-2 bg-neutral-800/30 rounded-lg">
-                              <span className="text-neutral-300 truncate w-32">{item.name}</span>
-                              <span className="text-neutral-500">{item.clipsCount} klip</span>
-                              <span className="text-neutral-600">{item.date}</span>
+                           <div key={item.id} className="flex items-center justify-between text-xs p-2.5 bg-neutral-800/30 rounded-lg hover:bg-neutral-800/50 transition-colors">
+                              <span className="text-neutral-300 truncate max-w-[120px] flex-shrink" title={item.name}>{item.name}</span>
+                              <span className="text-neutral-400 flex-shrink-0 px-2">{item.clipsCount} klip</span>
+                              <span className="text-neutral-600 text-[10px] flex-shrink-0">{item.date}</span>
                            </div>
                          ))}
                       </div>
@@ -693,32 +700,59 @@ export default function App() {
         {/* Status Toast */}
         {message.text && (
            <div className={cn(
-              "fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 transition-all z-50",
-              message.type === 'success' ? "bg-green-600 text-white" : 
-              message.type === 'error' ? "bg-red-600 text-white" : "bg-neutral-800 text-white border border-neutral-700"
+              "fixed bottom-4 md:bottom-8 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 px-4 md:px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 transition-all z-50 backdrop-blur-sm",
+              message.type === 'success' ? "bg-green-600/95 text-white border border-green-400/20" : 
+              message.type === 'error' ? "bg-red-600/95 text-white border border-red-400/20" : 
+              "bg-neutral-800/95 text-white border border-neutral-700/50"
            )}>
-              {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : 
-               message.type === 'error' ? <AlertCircle className="w-5 h-5" /> : <RefreshCw className="w-5 h-5 animate-spin" />}
-              <span className="text-sm font-medium">{message.text}</span>
-              <button onClick={() => setMessage({text: '', type: 'info'})}><X className="w-4 h-4" /></button>
+              {message.type === 'success' ? <CheckCircle2 className="w-5 h-5 flex-shrink-0" /> : 
+               message.type === 'error' ? <AlertCircle className="w-5 h-5 flex-shrink-0" /> : 
+               <RefreshCw className="w-5 h-5 animate-spin flex-shrink-0" />}
+              <span className="text-sm font-medium flex-1">{message.text}</span>
+              <button 
+                onClick={() => setMessage({text: '', type: 'info'})}
+                className="hover:bg-white/10 rounded-full p-1 transition-colors flex-shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
            </div>
         )}
       </div>
 
       <style>
         {`
+        .custom-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: #404040 transparent;
+        }
         .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
+          width: 8px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
           background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #333;
+          background: #404040;
           border-radius: 10px;
+          border: 2px solid transparent;
+          background-clip: padding-box;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #444;
+          background: #525252;
+          background-clip: padding-box;
+        }
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-in {
+          animation: slideIn 0.3s ease-out;
         }
         `}
       </style>
