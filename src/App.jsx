@@ -103,6 +103,38 @@ export default function App() {
     };
   }, []);
 
+  const FONT_FILE_NAME = 'Roboto-Regular.ttf';
+  const FONT_URL = 'https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxP.ttf';
+
+  const ensureDrawtextFont = async () => {
+    const ffmpeg = ffmpegRef.current;
+
+    try {
+      await ffmpeg.readFile(FONT_FILE_NAME);
+      return;
+    } catch {
+      // Font not present yet
+    }
+
+    try {
+      const fontData = await fetchFile(FONT_URL);
+      await ffmpeg.writeFile(FONT_FILE_NAME, fontData);
+      console.log('Font written successfully:', FONT_FILE_NAME);
+    } catch (e) {
+      console.warn('Failed to download/write font for drawtext:', e);
+      throw new Error('Gagal memuat font untuk watermark. Mohon coba lagi.');
+    }
+  };
+
+  const escapeDrawtextText = (text) => {
+    // Escape characters that break drawtext parsing
+    return String(text)
+      .replace(/\\/g, '\\\\')
+      .replace(/:/g, '\\:')
+      .replace(/'/g, "\\'")
+      .replace(/\n/g, '\\\\n');
+  };
+
   const loadFFmpeg = async () => {
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
     const ffmpeg = ffmpegRef.current;
@@ -257,6 +289,10 @@ export default function App() {
       await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
       console.log('File written successfully:', inputName);
 
+      if (settings.watermark) {
+        await ensureDrawtextFont();
+      }
+
       let intervals = [];
       if (markers.length > 0) {
         // Split by markers
@@ -344,9 +380,8 @@ export default function App() {
           }
 
           if (settings.watermark) {
-            // Use drawtext without fontfile parameter for FFmpeg.wasm compatibility
-            // Default font will be used automatically
-            filterComplex += `${lastLabel}drawtext=text='${settings.watermark}':x=w-tw-20:y=h-th-20:fontsize=48:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2[v_out];`;
+            const watermarkText = escapeDrawtextText(settings.watermark);
+            filterComplex += `${lastLabel}drawtext=fontfile=${FONT_FILE_NAME}:text='${watermarkText}':x=w-tw-20:y=h-th-20:fontsize=48:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2[v_out];`;
             lastLabel = '[v_out]';
           }
 
@@ -384,6 +419,13 @@ export default function App() {
           
           console.warn('FFmpeg warning during processing:', ffmpegError.message);
           console.log('Continuing - output file was created successfully');
+        }
+
+        // Verify output exists even if ffmpeg.exec resolved successfully
+        const filesAfter = await ffmpeg.listFiles().catch(() => []);
+        const outputExists = filesAfter.some(f => f.name === outputName);
+        if (!outputExists) {
+          throw new Error('FFmpeg tidak menghasilkan file output untuk klip ini.');
         }
 
         // Read the output file
