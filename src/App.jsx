@@ -1,29 +1,86 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import { 
+  Upload, 
+  Scissors, 
+  Download, 
+  Play, 
+  Trash2, 
+  Plus, 
+  Settings, 
+  CheckCircle2, 
+  AlertCircle,
+  X,
+  FileArchive,
+  Copy,
+  LayoutGrid,
+  List as ListIcon,
+  RefreshCw,
+  Clock,
+  Zap,
+  ShieldCheck,
+  Type,
+  Maximize,
+  Volume2
+} from 'lucide-react';
+import { createZip } from './utils/zip';
+import { clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 
-function App() {
+function cn(...inputs) {
+  return twMerge(clsx(inputs));
+}
+
+const DEFAULT_TRIM_SETTINGS = {
+  duration: 30,
+  autoFit: 'merge', // 'merge', 'discard'
+  remainderThreshold: 5,
+  mode: 'copy', // 'copy', 'encode'
+  template: '{name}_part{index}_{start}-{end}',
+};
+
+const PREMIUM_SETTINGS = {
+  watermark: '',
+  resize: 'none', // 'none', '9:16'
+  normalize: false,
+  quality: 'Medium', // 'Low', 'Medium', 'High'
+};
+
+export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [videoFile, setVideoFile] = useState(null);
+  const [videoUrl, setVideoUrl] = useState('');
+  const [duration, setDuration] = useState(0);
+  const [markers, setMarkers] = useState([]);
   const [clips, setClips] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [message, setMessage] = useState('Memuat ffmpeg...');
+  const [currentTask, setCurrentTask] = useState('');
+  const [message, setMessage] = useState({ text: 'Memuat ffmpeg...', type: 'info' });
+  const [trimSettings, setTrimSettings] = useState(DEFAULT_TRIM_SETTINGS);
+  const [premiumSettings, setPremiumSettings] = useState(PREMIUM_SETTINGS);
+  const [history, setHistory] = useState([]);
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+
   const ffmpegRef = useRef(new FFmpeg());
+  const videoRef = useRef(null);
 
   useEffect(() => {
-    load();
-    return () => {
-      clips.forEach(clip => URL.revokeObjectURL(clip.url));
-    };
+    loadFFmpeg();
   }, []);
 
-  const load = async () => {
+  const loadFFmpeg = async () => {
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
     const ffmpeg = ffmpegRef.current;
     
     ffmpeg.on('log', ({ message }) => {
       console.log(message);
+    });
+
+    ffmpeg.on('progress', ({ progress }) => {
+      // This is for internal ffmpeg progress (within a single exec)
+      // We'll combine it with our manual clip progress
     });
 
     try {
@@ -32,150 +89,639 @@ function App() {
         wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
       });
       setLoaded(true);
-      setMessage('FFmpeg siap digunakan.');
+      setMessage({ text: 'FFmpeg siap!', type: 'success' });
     } catch (error) {
       console.error('Gagal memuat FFmpeg:', error);
-      setMessage('Gagal memuat FFmpeg. Pastikan browser mendukung SharedArrayBuffer.');
+      setMessage({ text: 'Gagal memuat FFmpeg. Pastikan browser mendukung SharedArrayBuffer.', type: 'error' });
     }
   };
 
   const handleFileUpload = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (file) {
+      if (videoUrl) URL.revokeObjectURL(videoUrl);
       setVideoFile(file);
+      setVideoUrl(URL.createObjectURL(file));
       setClips([]);
       setProgress(0);
-      setMessage(`Video dipilih: ${file.name}`);
+      setMessage({ text: `Video dimuat: ${file.name}`, type: 'success' });
     }
   };
 
-  const getDuration = (file) => {
-    return new Promise((resolve) => {
-      const video = document.createElement('video');
-      video.preload = 'metadata';
-      video.onloadedmetadata = () => {
-        window.URL.revokeObjectURL(video.src);
-        resolve(video.duration);
-      };
-      video.src = URL.createObjectURL(file);
-    });
+  const onLoadedMetadata = () => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration);
+    }
+  };
+
+  const addMarker = () => {
+    if (videoRef.current) {
+      const time = videoRef.current.currentTime;
+      if (!markers.includes(time)) {
+        setMarkers([...markers, time].sort((a, b) => a - b));
+      }
+    }
+  };
+
+  const removeMarker = (index) => {
+    setMarkers(markers.filter((_, i) => i !== index));
+  };
+
+  const formatTime = (seconds) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return [h, m, s]
+      .map(v => v.toString().padStart(2, '0'))
+      .filter((v, i) => v !== '00' || i > 0)
+      .join(':');
+  };
+
+  const generateClipName = (index, start, end) => {
+    const baseName = videoFile.name.replace(/\.[^/.]+$/, "");
+    return trimSettings.template
+      .replace('{name}', baseName)
+      .replace('{part}', (index + 1).toString().padStart(3, '0'))
+      .replace('{index}', (index + 1).toString())
+      .replace('{start}', Math.floor(start).toString())
+      .replace('{end}', Math.floor(end).toString()) + '.mp4';
   };
 
   const processVideo = async () => {
-    if (!videoFile) return;
-    
-    // Cleanup previous clips
-    clips.forEach(clip => URL.revokeObjectURL(clip.url));
+    if (!videoFile || !loaded) return;
     
     setIsProcessing(true);
-    setClips([]);
     setProgress(0);
-    setMessage('Mulai memproses video...');
-
+    setClips([]);
+    
     const ffmpeg = ffmpegRef.current;
-    const { name } = videoFile;
+    const inputName = 'input_' + videoFile.name;
     
     try {
-      await ffmpeg.writeFile(name, await fetchFile(videoFile));
+      setCurrentTask('Menyiapkan file...');
+      await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
 
-      const duration = await getDuration(videoFile);
-      const clipDuration = 30;
-      const numberOfClips = Math.ceil(duration / clipDuration);
+      let intervals = [];
+      if (markers.length > 0) {
+        // Split by markers
+        let lastTime = 0;
+        const sortedMarkers = [...markers, duration].sort((a, b) => a - b);
+        for (let m of sortedMarkers) {
+          if (m > lastTime + 0.1) {
+            intervals.push({ start: lastTime, end: m });
+          }
+          lastTime = m;
+        }
+      } else {
+        // Auto split by duration
+        const clipDur = parseFloat(trimSettings.duration);
+        let current = 0;
+        while (current < duration) {
+          let end = Math.min(current + clipDur, duration);
+          const remainder = duration - end;
+          
+          if (remainder > 0 && remainder < parseFloat(trimSettings.remainderThreshold)) {
+            if (trimSettings.autoFit === 'merge') {
+              end = duration;
+            } else if (trimSettings.autoFit === 'discard') {
+              intervals.push({ start: current, end: end });
+              current = duration; // stop
+              break;
+            }
+          }
+          
+          intervals.push({ start: current, end: end });
+          current = end;
+          if (current >= duration) break;
+        }
+      }
 
       const generatedClips = [];
+      for (let i = 0; i < intervals.length; i++) {
+        // We use a local variable to check for cancellation because state updates might be slow
+        if (!isProcessing && i > 0) break; 
 
-      for (let i = 0; i < numberOfClips; i++) {
-        const startTime = i * clipDuration;
-        const outputName = `clip-${i + 1}.mp4`;
+        const { start, end } = intervals[i];
+        const clipDur = end - start;
+        const outputName = generateClipName(i, start, end);
         
-        setMessage(`Memproses bagian ${i + 1} dari ${numberOfClips}...`);
+        setCurrentTask(`Memotong bagian ${i + 1} dari ${intervals.length}...`);
         
-        // Fast clip using -c copy
-        await ffmpeg.exec([
-          '-ss', startTime.toString(),
-          '-i', name,
-          '-t', clipDuration.toString(),
-          '-c', 'copy',
-          outputName
-        ]);
+        let args = [
+          '-ss', start.toFixed(3),
+          '-i', inputName,
+          '-t', clipDur.toFixed(3),
+        ];
+
+        if (trimSettings.mode === 'copy' && premiumSettings.resize === 'none' && !premiumSettings.normalize && !premiumSettings.watermark) {
+          args.push('-c', 'copy');
+        } else {
+          // Encoding mode or premium features required
+          let filterComplex = '';
+          let lastLabel = '[0:v]';
+          
+          if (premiumSettings.resize === '9:16') {
+             filterComplex += `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:10[bg];`;
+             filterComplex += `[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];`;
+             filterComplex += `[bg][fg]overlay=(W-w)/2:(H-h)/2[v];`;
+             lastLabel = '[v]';
+          }
+          
+          if (premiumSettings.watermark) {
+            filterComplex += `${lastLabel}drawtext=text='${premiumSettings.watermark}':x=w-tw-20:y=h-th-20:fontsize=48:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2[v_out];`;
+            lastLabel = '[v_out]';
+          }
+
+          if (filterComplex) {
+            // Remove trailing semicolon
+            if (filterComplex.endsWith(';')) filterComplex = filterComplex.slice(0, -1);
+            args.push('-filter_complex', filterComplex);
+            args.push('-map', lastLabel);
+            args.push('-map', '0:a?');
+          }
+
+          if (premiumSettings.normalize) {
+            args.push('-af', 'loudnorm');
+          }
+
+          args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', premiumSettings.quality === 'High' ? '18' : premiumSettings.quality === 'Medium' ? '23' : '28');
+          args.push('-c:a', 'aac', '-b:a', '128k');
+        }
+
+        args.push(outputName);
+        
+        await ffmpeg.exec(args);
 
         const data = await ffmpeg.readFile(outputName);
         const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
         
-        generatedClips.push({
+        // Generate thumbnail (first frame)
+        const thumbName = `thumb_${i}.jpg`;
+        await ffmpeg.exec([
+            '-ss', start.toFixed(3),
+            '-i', inputName,
+            '-vframes', '1',
+            '-q:v', '2',
+            thumbName
+        ]);
+        const thumbData = await ffmpeg.readFile(thumbName);
+        const thumbUrl = URL.createObjectURL(new Blob([thumbData.buffer], { type: 'image/jpeg' }));
+
+        const newClip = {
+          id: Math.random().toString(36).substr(2, 9),
           url,
+          thumbUrl,
           name: outputName,
           index: i,
-          startTime,
-          endTime: Math.min(startTime + clipDuration, duration)
-        });
+          startTime: start,
+          endTime: end,
+          duration: clipDur
+        };
         
-        // Update state to show clips as they are generated
+        generatedClips.push(newClip);
         setClips([...generatedClips]);
-        setProgress(((i + 1) / numberOfClips) * 100);
+        setProgress(((i + 1) / intervals.length) * 100);
       }
 
-      setMessage('Proses selesai! Semua bagian telah dipotong.');
+      setHistory(prev => [{
+          id: Date.now(),
+          name: videoFile.name,
+          date: new Date().toLocaleTimeString(),
+          clipsCount: generatedClips.length
+      }, ...prev]);
+
+      setMessage({ text: 'Selesai! Semua klip telah diproses.', type: 'success' });
     } catch (error) {
-      console.error('Error saat memproses:', error);
-      setMessage('Terjadi kesalahan saat memproses video.');
+      console.error(error);
+      setMessage({ text: 'Terjadi kesalahan saat memproses.', type: 'error' });
     } finally {
       setIsProcessing(false);
+      setCurrentTask('');
     }
   };
 
+  const handleDownloadAll = async () => {
+    if (clips.length === 0) return;
+    setCurrentTask('Menyiapkan ZIP...');
+    const zipBlob = await createZip(clips);
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${videoFile.name.split('.')[0]}_clips.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setCurrentTask('');
+  };
+
+  const copyCaptions = () => {
+    const captions = clips.map(c => `Part ${c.index + 1} (${formatTime(c.startTime)} - ${formatTime(c.endTime)})`).join('\n');
+    navigator.clipboard.writeText(captions);
+    setMessage({ text: 'Caption disalin ke clipboard!', type: 'success' });
+  };
+
+  const removeClip = (id) => {
+    setClips(clips.filter(c => c.id !== id));
+  };
+
   return (
-    <div className="container">
-      <h1>React Video Auto Clipper</h1>
-      <p>Potong video secara otomatis menjadi bagian berdurasi 30 detik langsung di browser.</p>
-      
-      <div className="upload-section">
-        <input 
-          type="file" 
-          accept="video/mp4,video/webm" 
-          onChange={handleFileUpload}
-          disabled={!loaded || isProcessing}
-        />
-        <div style={{ marginTop: '10px' }}>
-          <button 
-            onClick={processVideo} 
-            disabled={!loaded || !videoFile || isProcessing}
-          >
-            {isProcessing ? 'Sedang Memproses...' : 'Mulai Potong Video'}
-          </button>
-        </div>
-      </div>
-
-      {message && <p className="status-message">{message}</p>}
-
-      {(isProcessing || progress > 0) && (
-        <div style={{ width: '100%', maxWidth: '500px', margin: '0 auto' }}>
-          <p>Progress: {Math.round(progress)}%</p>
-          <div className="progress-bar-container">
-            <div 
-              className="progress-bar" 
-              style={{ width: `${progress}%` }}
-            ></div>
+    <div className="min-h-screen bg-neutral-950 text-neutral-200 p-4 md:p-8 font-sans">
+      <div className="max-w-6xl mx-auto space-y-8">
+        {/* Header */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-neutral-800 pb-6">
+          <div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+              Smart Video Clipper
+            </h1>
+            <p className="text-neutral-500 mt-1">Potong video cerdas untuk TikTok, Shorts, dan Reels.</p>
           </div>
-        </div>
-      )}
+          
+          <div className="flex items-center gap-3">
+             {!loaded && (
+                 <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/10 text-yellow-500 rounded-full text-sm border border-yellow-500/20">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Memuat FFmpeg...</span>
+                 </div>
+             )}
+             {loaded && (
+                 <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 text-green-500 rounded-full text-sm border border-green-500/20">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>FFmpeg Siap</span>
+                 </div>
+             )}
+          </div>
+        </header>
 
-      <div className="clips-grid">
-        {clips.map((clip) => (
-          <div key={clip.index} className="clip-card">
-            <h3>Bagian {clip.index + 1}</h3>
-            <p>{Math.round(clip.startTime)}s - {Math.round(clip.endTime)}s</p>
-            <video src={clip.url} controls />
-            <div style={{ marginTop: '10px' }}>
-              <a href={clip.url} download={clip.name}>
-                <button style={{ width: '100%' }}>Download</button>
-              </a>
+        <main className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Left Column - Controls & Preview */}
+          <div className="lg:col-span-7 space-y-6">
+            {/* Upload Area */}
+            {!videoFile ? (
+              <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-neutral-800 rounded-2xl cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  <Upload className="w-12 h-12 text-neutral-600 group-hover:text-blue-500 transition-colors mb-4" />
+                  <p className="mb-2 text-sm text-neutral-400">
+                    <span className="font-semibold text-neutral-200">Klik untuk upload</span> atau drag and drop
+                  </p>
+                  <p className="text-xs text-neutral-500">MP4, WebM (Maks 500MB)</p>
+                </div>
+                <input type="file" className="hidden" accept="video/*" onChange={handleFileUpload} />
+              </label>
+            ) : (
+              <div className="space-y-4">
+                <div className="relative aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-neutral-800">
+                  <video 
+                    ref={videoRef}
+                    src={videoUrl} 
+                    className="w-full h-full" 
+                    controls 
+                    onLoadedMetadata={onLoadedMetadata}
+                  />
+                  <button 
+                    onClick={() => {
+                        setVideoFile(null);
+                        setMarkers([]);
+                        setClips([]);
+                        if (videoUrl) URL.revokeObjectURL(videoUrl);
+                        setVideoUrl('');
+                    }}
+                    className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-red-500 transition-colors rounded-full backdrop-blur-md"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                
+                <div className="flex items-center justify-between gap-4">
+                   <div className="flex items-center gap-2 text-sm text-neutral-400">
+                      <Clock className="w-4 h-4" />
+                      <span>Durasi: {formatTime(duration)}</span>
+                   </div>
+                   <button 
+                    onClick={addMarker}
+                    className="flex items-center gap-2 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-sm transition-colors"
+                   >
+                     <Plus className="w-4 h-4" />
+                     Tambah Marker (Split)
+                   </button>
+                </div>
+
+                {markers.length > 0 && (
+                  <div className="flex flex-wrap gap-2 p-4 bg-neutral-900/50 rounded-xl border border-neutral-800">
+                    <span className="text-xs font-semibold text-neutral-500 w-full mb-1">MARKER SPLIT:</span>
+                    {markers.map((m, i) => (
+                      <div key={i} className="flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-md text-xs">
+                        <span>{formatTime(m)}</span>
+                        <button onClick={() => removeMarker(i)}><X className="w-3 h-3 hover:text-red-400" /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Smart Settings */}
+            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-6">
+              <div className="flex items-center gap-2 border-b border-neutral-800 pb-4">
+                <Settings className="w-5 h-5 text-blue-500" />
+                <h2 className="font-semibold text-lg">Konfigurasi Pemotongan</h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-neutral-400">Durasi Per Klip</label>
+                  <select 
+                    value={trimSettings.duration}
+                    onChange={(e) => setTrimSettings({...trimSettings, duration: e.target.value})}
+                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 outline-none focus:border-blue-500 transition-colors"
+                  >
+                    <option value="15">15 Detik</option>
+                    <option value="30">30 Detik</option>
+                    <option value="60">60 Detik</option>
+                    <option value="90">90 Detik</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-neutral-400">Penanganan Sisa</label>
+                  <select 
+                    value={trimSettings.autoFit}
+                    onChange={(e) => setTrimSettings({...trimSettings, autoFit: e.target.value})}
+                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 outline-none focus:border-blue-500 transition-colors"
+                  >
+                    <option value="merge">Gabung ke klip terakhir</option>
+                    <option value="discard">Buang jika sisa sedikit</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-neutral-400">Mode Proses</label>
+                  <div className="flex p-1 bg-neutral-800 rounded-lg">
+                    <button 
+                      onClick={() => setTrimSettings({...trimSettings, mode: 'copy'})}
+                      className={cn(
+                        "flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-md transition-all",
+                        trimSettings.mode === 'copy' ? "bg-blue-600 text-white shadow-lg" : "text-neutral-400 hover:text-neutral-200"
+                      )}
+                    >
+                      <Zap className="w-3 h-3" />
+                      Instan (-c copy)
+                    </button>
+                    <button 
+                      onClick={() => setTrimSettings({...trimSettings, mode: 'encode'})}
+                      className={cn(
+                        "flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-md transition-all",
+                        trimSettings.mode === 'encode' ? "bg-blue-600 text-white shadow-lg" : "text-neutral-400 hover:text-neutral-200"
+                      )}
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Re-encode (Rapi)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-neutral-400">Template Nama</label>
+                  <input 
+                    type="text" 
+                    value={trimSettings.template}
+                    onChange={(e) => setTrimSettings({...trimSettings, template: e.target.value})}
+                    placeholder="{name}_{part}"
+                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Premium Tools */}
+              <div className="pt-4 border-t border-neutral-800">
+                <div className="flex items-center gap-2 mb-4">
+                  <ShieldCheck className="w-4 h-4 text-purple-500" />
+                  <span className="text-sm font-semibold text-neutral-300">Fitur Premium</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <button 
+                    onClick={() => setPremiumSettings({...premiumSettings, resize: premiumSettings.resize === '9:16' ? 'none' : '9:16'})}
+                    className={cn(
+                      "flex items-center gap-3 p-3 rounded-xl border text-left transition-all",
+                      premiumSettings.resize === '9:16' ? "bg-purple-500/10 border-purple-500/50 text-purple-400" : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-neutral-600"
+                    )}
+                  >
+                    <Maximize className="w-5 h-5" />
+                    <div className="text-xs">
+                      <div className="font-bold">Auto 9:16</div>
+                      <div className="opacity-60 text-[10px]">Untuk Shorts/TikTok</div>
+                    </div>
+                  </button>
+
+                  <button 
+                    onClick={() => setPremiumSettings({...premiumSettings, normalize: !premiumSettings.normalize})}
+                    className={cn(
+                      "flex items-center gap-3 p-3 rounded-xl border text-left transition-all",
+                      premiumSettings.normalize ? "bg-purple-500/10 border-purple-500/50 text-purple-400" : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:border-neutral-600"
+                    )}
+                  >
+                    <Volume2 className="w-5 h-5" />
+                    <div className="text-xs">
+                      <div className="font-bold">Normalisasi</div>
+                      <div className="opacity-60 text-[10px]">Audio konsisten</div>
+                    </div>
+                  </button>
+
+                  <div className="relative">
+                    <Type className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+                    <input 
+                      type="text" 
+                      placeholder="Watermark teks..."
+                      value={premiumSettings.watermark}
+                      onChange={(e) => setPremiumSettings({...premiumSettings, watermark: e.target.value})}
+                      className="w-full bg-neutral-800 border border-neutral-700 rounded-xl pl-10 pr-3 py-3 text-xs outline-none focus:border-purple-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
+
+            <button 
+              disabled={!videoFile || isProcessing || !loaded}
+              onClick={processVideo}
+              className={cn(
+                "w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all",
+                isProcessing ? "bg-neutral-800 text-neutral-500 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20 active:scale-[0.98]"
+              )}
+            >
+              {isProcessing ? (
+                <>
+                  <RefreshCw className="w-6 h-6 animate-spin" />
+                  Memproses {Math.round(progress)}%
+                </>
+              ) : (
+                <>
+                  <Scissors className="w-6 h-6" />
+                  Mulai Potong Sekarang
+                </>
+              )}
+            </button>
+            
+            {isProcessing && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-blue-400 font-medium">{currentTask}</span>
+                  <span className="text-neutral-500">{Math.round(progress)}%</span>
+                </div>
+                <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-blue-500 transition-all duration-300 ease-out shadow-[0_0_12px_rgba(59,130,246,0.5)]"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <button 
+                  onClick={() => setIsProcessing(false)}
+                  className="text-xs text-red-500 hover:underline mx-auto block"
+                >
+                  Batalkan Proses
+                </button>
+              </div>
+            )}
           </div>
-        ))}
+
+          {/* Right Column - Results */}
+          <div className="lg:col-span-5 space-y-6">
+             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl flex flex-col h-[800px]">
+                <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
+                   <div className="flex items-center gap-2">
+                      <LayoutGrid className="w-4 h-4 text-neutral-500" />
+                      <h2 className="font-semibold">Hasil Potongan ({clips.length})</h2>
+                   </div>
+                   <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => setViewMode('grid')}
+                        className={cn("p-1.5 rounded-md", viewMode === 'grid' ? "bg-neutral-800 text-blue-400" : "text-neutral-500")}
+                      >
+                        <LayoutGrid className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => setViewMode('list')}
+                        className={cn("p-1.5 rounded-md", viewMode === 'list' ? "bg-neutral-800 text-blue-400" : "text-neutral-500")}
+                      >
+                        <ListIcon className="w-4 h-4" />
+                      </button>
+                   </div>
+                </div>
+
+                <div className="p-4 border-b border-neutral-800 bg-neutral-900/50 flex gap-2">
+                   <button 
+                    disabled={clips.length === 0}
+                    onClick={handleDownloadAll}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-green-600 hover:bg-green-500 disabled:bg-neutral-800 disabled:text-neutral-600 text-white rounded-xl text-sm font-bold transition-all"
+                   >
+                     <FileArchive className="w-4 h-4" />
+                     Download ZIP
+                   </button>
+                   <button 
+                    disabled={clips.length === 0}
+                    onClick={copyCaptions}
+                    className="px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 disabled:text-neutral-600 rounded-xl text-sm font-medium transition-all"
+                    title="Copy Timestamp Caption"
+                   >
+                     <Copy className="w-4 h-4" />
+                   </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                  {clips.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-neutral-600 space-y-3">
+                       <Scissors className="w-12 h-12 opacity-20" />
+                       <p className="text-sm">Belum ada video yang diproses.</p>
+                    </div>
+                  ) : (
+                    <div className={cn(
+                        "grid gap-4",
+                        viewMode === 'grid' ? "grid-cols-2" : "grid-cols-1"
+                    )}>
+                       {clips.map((clip, idx) => (
+                         <div key={clip.id} className="group bg-neutral-800/50 border border-neutral-700/50 rounded-xl overflow-hidden hover:border-blue-500/50 transition-all">
+                            <div className="relative aspect-video bg-black">
+                               <img src={clip.thumbUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" alt={clip.name} />
+                               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <a href={clip.url} target="_blank" rel="noreferrer" className="p-2 bg-blue-600 rounded-full shadow-xl">
+                                    <Play className="w-4 h-4 fill-white" />
+                                  </a>
+                               </div>
+                               <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/80 rounded text-[10px] font-mono">
+                                  {Math.round(clip.duration)}s
+                               </div>
+                            </div>
+                            <div className="p-3 space-y-2">
+                               <div className="text-[10px] font-medium text-neutral-400 truncate" title={clip.name}>
+                                 {clip.name}
+                               </div>
+                               <div className="flex items-center justify-between">
+                                  <span className="text-[10px] text-neutral-500">{formatTime(clip.startTime)} - {formatTime(clip.endTime)}</span>
+                                  <div className="flex items-center gap-1">
+                                     <button onClick={() => removeClip(clip.id)} className="p-1 hover:text-red-400 transition-colors">
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                     </button>
+                                     <a href={clip.url} download={clip.name} className="p-1 hover:text-blue-400 transition-colors">
+                                        <Download className="w-3.5 h-3.5" />
+                                     </a>
+                                  </div>
+                               </div>
+                            </div>
+                         </div>
+                       ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* History Section */}
+                {history.length > 0 && (
+                   <div className="p-4 border-t border-neutral-800 bg-neutral-900/80">
+                      <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3">Riwayat Sesi</h3>
+                      <div className="space-y-2">
+                         {history.slice(0, 3).map(item => (
+                           <div key={item.id} className="flex items-center justify-between text-xs p-2 bg-neutral-800/30 rounded-lg">
+                              <span className="text-neutral-300 truncate w-32">{item.name}</span>
+                              <span className="text-neutral-500">{item.clipsCount} klip</span>
+                              <span className="text-neutral-600">{item.date}</span>
+                           </div>
+                         ))}
+                      </div>
+                   </div>
+                )}
+             </div>
+          </div>
+        </main>
+
+        {/* Status Toast */}
+        {message.text && (
+           <div className={cn(
+              "fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 transition-all z-50",
+              message.type === 'success' ? "bg-green-600 text-white" : 
+              message.type === 'error' ? "bg-red-600 text-white" : "bg-neutral-800 text-white border border-neutral-700"
+           )}>
+              {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : 
+               message.type === 'error' ? <AlertCircle className="w-5 h-5" /> : <RefreshCw className="w-5 h-5 animate-spin" />}
+              <span className="text-sm font-medium">{message.text}</span>
+              <button onClick={() => setMessage({text: '', type: 'info'})}><X className="w-4 h-4" /></button>
+           </div>
+        )}
       </div>
+
+      <style>
+        {`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #333;
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #444;
+        }
+        `}
+      </style>
     </div>
   );
 }
-
-export default App;
