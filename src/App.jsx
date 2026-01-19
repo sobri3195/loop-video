@@ -432,10 +432,10 @@ export default function App() {
         }
       }
 
+      // Update clips state to show any successfully processed clips
+      setClips([...generatedClips]);
+
       if (shouldProcessRef.current) {
-        // Final clips state update to ensure all clips are shown
-        setClips([...generatedClips]);
-        
         setHistory(prev => [{
             id: Date.now(),
             name: videoFile.name,
@@ -444,6 +444,10 @@ export default function App() {
         }, ...prev]);
 
         setMessage({ text: 'Selesai! Semua klip telah diproses.', type: 'success' });
+      } else if (generatedClips.length > 0) {
+        setMessage({ text: `Proses dibatalkan. ${generatedClips.length} klip berhasil diproses.`, type: 'info' });
+      } else {
+        setMessage({ text: 'Proses dibatalkan.', type: 'info' });
       }
     } catch (error) {
       console.error(error);
